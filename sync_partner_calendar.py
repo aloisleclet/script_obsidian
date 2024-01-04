@@ -2,14 +2,12 @@
 
 from os import listdir, replace
 from os.path import isfile, join, exists
-
+from datetime import datetime
 
 root_path = "/home/dev/Documents/notes";
 calendar_path = root_path + "/calendar_cie_beta";
 trash_path = root_path + "/trash";
 tag = "#partenaire";
-
-
 
 # utils
 
@@ -24,10 +22,10 @@ def date_fr_to_us(date_fr):
 def create_event_if_not_exist(partner):
 
     date_us = partner['date'];
-    filename = partner['filename'];
-    filename_event = partner['filename_event'];
+
+    filename_event = partner['date']+ " " + partner['title'] + ".md" ;
     partner_link = ""'[[{title}]]'"".format(title = partner['title']);
-    title = "deadline " + partner['title'];
+    title = partner['title'];
 
     print("create event "+ filename_event);
 
@@ -48,7 +46,8 @@ note: "{partner_link}"
         f.write(content);
         f.close();
 
-def get_partner_files():
+
+def get_partners():
     only_files = [f for f in listdir(root_path) if isfile(join(root_path, f))]
     
     partners = [];
@@ -91,13 +90,11 @@ def get_partner_files():
             
         for date in dates:
             date_us = date_fr_to_us(date);
-            filename = title + ".md";
-            filename_event = date_us + " " + title + ".md";
-            partners.append({'date': date_us, 'title': title, 'match': 0, 'filename_event': filename_event, 'filename': filename});
+            partners.append({'date': date_us, 'title': title, 'match': 0});
 
     return partners;
 
-def get_event_files():
+def get_events():
     only_files = [f for f in listdir(calendar_path) if isfile(join(calendar_path, f))]
     
     events = [];
@@ -127,7 +124,7 @@ def get_event_files():
 # move event into trash folder
 
 def drop_event(event):
-    filename = event['filename'];
+    filename = event['date'] + " " + event["title"] + ".md";
     
     src_path = """{calendar_path}/{filename}""".format(calendar_path = calendar_path, filename = filename);
     dest_path = """{trash_path}/{filename}""".format(trash_path = trash_path, filename = filename);
@@ -136,37 +133,68 @@ def drop_event(event):
     
     print('drop event'+filename);
 
-# main
+# create matching notes for each partners deadlines
 
-partners = get_partner_files();
-events = get_event_files();
+def sync_partner_calendar(partners, events):
+    
+    # check partner / event match
+    
+    i = 0;
+    j = 0;
+    
+    while i < len(partners):
+        j = 0;
+    
+        while j < len(events):
+            if (partners[i]['date'] == events[j]['date'] and partners[i]['title'] == events[j]['parent_partner_title']):
+                partners[i]['match'] = 1;
+                events[j]['match'] = 1;
+            j += 1;
+        i += 1;
+    
+    # create file when partner as no event
+    
+    for partner in partners:
+        if (partner['match'] == 0):
+            create_event_if_not_exist(partner);
+    
+    # drop files when event as no partner
+    
+    for event in events:
+        if (event['match'] == 0):
+            drop_event(event);
 
-#print(events);
-#print(partners);
+# update year of each date(deadlines) to current year for partners notes
+# it only upgrade events files (partner files remained unchanged)
 
-# check partner / event match
+def update_partners_deadlines(partners):
 
-i = 0;
-j = 0;
-
-while i < len(partners):
+    i = 0;
     j = 0;
 
-    while j < len(events):
-        if (partners[i]['date'] == events[j]['date'] and partners[i]['title'] == events[j]['parent_partner_title']):
-            partners[i]['match'] = 1;
-            events[j]['match'] = 1;
-        j += 1;
-    i += 1;
+    while i < len(partners):
+        date = partners[i]['date'];
+        
+        if len(date) > 0:
+            d = date.split('-');
+            year = d[0];
+            month = d[1];
+            day = d[2]; 
+            now_year = datetime.today().strftime('%Y');
 
-# create file when partner as no event
+            if year != now_year:
+                partners[i]['date'] = now_year+ "-" +month+ "-" + day;
+                print(partners[i]);
+        i += 1;
+    return partners;
 
-for partner in partners:
-    if (partner['match'] == 0):
-        create_event_if_not_exist(partner);
+# main
 
-# drop files when event as no partner
+partners = get_partners();
+partners = update_partners_deadlines(partners);
+  
+events = get_events();
 
-for event in events:
-    if (event['match'] == 0):
-        drop_event(event);
+sync_partner_calendar(partners, events);
+
+
